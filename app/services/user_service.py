@@ -66,14 +66,10 @@ class UserService:
                     new_nickname =generate_nickname
                 validated_data["nickname"] = new_nickname
 
-
-
+            #Now, continue with creating the new User object
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
-            new_nickname = generate_nickname()
-            while await cls.get_by_nickname(session, new_nickname):
-                new_nickname = generate_nickname()
-            new_user.nickname = new_nickname
+           
             session.add(new_user)
             await session.commit()
             await email_service.send_verification_email(new_user)
