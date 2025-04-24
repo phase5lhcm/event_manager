@@ -58,6 +58,16 @@ class UserService:
                 logger.error("User with given email already exists.")
                 return None
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+
+            #Let's auto generate a nickname if the user does not provide one
+            if not validated_data.get("nickname"):
+                new_nickname = generate_nickname()
+                while await cls.get_by_nickname(session, new_nickname):
+                    new_nickname =generate_nickname
+                validated_data["nickname"] = new_nickname
+
+
+
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
             new_nickname = generate_nickname()
