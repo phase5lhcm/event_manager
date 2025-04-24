@@ -66,7 +66,6 @@ class UserService:
                     new_nickname =generate_nickname
                 validated_data["nickname"] = new_nickname
 
-            #Now, continue with creating the new User object
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
            
