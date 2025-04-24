@@ -261,3 +261,8 @@ def user_response_data():
 @pytest.fixture
 def login_request_data():
     return {"username": "john_doe_123", "password": "SecurePassword123!"}
+
+@pytest.fixture
+async def admin_token(admin_user):
+    token = create_access_token(data={"sub": admin_user.email, "role": admin_user.role})
+    return token
