@@ -1,5 +1,6 @@
 from builtins import ValueError, any, bool, str
 from pydantic import BaseModel, EmailStr, Field, validator, root_validator
+from app.utils.security import validate_password_strength
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -40,6 +41,10 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     email: EmailStr = Field(..., example="john.doe@example.com")
     password: str = Field(..., example="Secure*1234")
+
+    @validator("password")
+    def enforce_pwrd_strength(cls, value):
+        return validate_password_strength(value)
 
 class UserUpdate(UserBase):
     email: Optional[EmailStr] = Field(None, example="john.doe@example.com")
