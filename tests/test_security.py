@@ -65,3 +65,14 @@ def test_hash_password_internal_error(monkeypatch):
     with pytest.raises(ValueError):
         hash_password("test")
 
+#This function ensures that verify_password raises a ValueError when the hashed password is malformed or invalid
+def test_verify_password_with_invalid_hash():
+    """
+This test ensures that the verify_password function fails gracefully
+when given a malformed or invalid hash string that cannot be verified by bcrypt.
+
+It confirms that a ValueError is raised to prevent misleading authentication results.
+"""
+    with pytest.raises(ValueError):
+        verify_password("plain", "not-a-real-hash")
+
