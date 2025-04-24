@@ -3,6 +3,8 @@ from builtins import Exception, ValueError, bool, int, str
 import secrets
 import bcrypt
 from logging import getLogger
+from pydantic import ValidationError
+import re
 
 # Set up logging
 logger = getLogger(__name__)
@@ -51,3 +53,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def generate_verification_token():
     return secrets.token_urlsafe(16)  # Generates a secure 16-byte URL-safe token
+
+
+def validate_password_strength(password: str) -> str:
+    if len(password) < 8:
+        raise ValidationError("Password must be at least 8 characters long.")
+    if not re.search(r"[A-Z]", password):
+        raise ValidationError("Password must contain at least one uppercase letter.")
+    if not re.search(r"[a-z]", password):
+        raise ValidationError("Password must contain at least one lowercase letter.")
+    if not re.search(r"[0-9]", password):
+        raise ValidationError("Password must contain at least one number.")
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        raise ValidationError("Password must contain at least one special character.")
+    
+    return password
