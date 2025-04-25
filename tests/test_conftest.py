@@ -4,9 +4,14 @@ from builtins import len
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.future import select
+from app.services.jwt_service import create_access_token
+from datetime import timedelta
+from app.dependencies import get_settings
 
 from app.models.user_model import User, UserRole
 from app.utils.security import verify_password
+
+settings = get_settings()
 
 @pytest.mark.asyncio
 async def test_user_creation(db_session, verified_user):
@@ -62,3 +67,13 @@ async def test_update_professional_status(db_session, verified_user):
     updated_user = result.scalars().first()
     assert updated_user.is_professional
     assert updated_user.professional_status_updated_at is not None
+
+@pytest.fixture
+async def user_token(user):
+    """
+    Fixture to generate a valid JWT token for a regular AUTHENTICATED user.
+    """
+    return create_access_token(
+        data={"sub": user.email, "role": user.role.value},
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+    )

@@ -5,6 +5,7 @@ from app.models.user_model import User
 from app.utils.nickname_gen import generate_nickname
 from app.services.jwt_service import decode_token  # Import your FastAPI app
 from urllib.parse import urlencode
+from app.utils.security import validate_password_strength
 
 #Example of a test function using the async_client fixture
 @pytest.mark.asyncio
@@ -186,3 +187,154 @@ async def test_list_users_unauthorized(async_client, user_token):
         headers={"Authorization": f"Bearer {user_token}"}
     )
     assert response.status_code == 403  # Forbidden, as expected for regular user
+
+
+@pytest.mark.asyncio
+async def test_get_user_not_found(async_client, admin_token):
+    """
+    Ensure that requesting a non-existent user returns 404.
+    """
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = await async_client.get(f"/users/{fake_uuid}", headers=headers)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+@pytest.mark.asyncio
+async def test_create_user_duplicate_email_as_admin(async_client, admin_token, verified_user):
+    """
+    Ensure that creating a user with an existing email returns 400 Bad Request.
+    """
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    user_data = {
+        "email": verified_user.email,
+        "password": "Secure123!",
+        "nickname": "dupeuser"
+    }
+    response = await async_client.post("/users/", json=user_data, headers=headers)
+    assert response.status_code == 400
+    assert "Email already exists" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_update_user_not_found(async_client, admin_token):
+    """
+    Ensure 404 is returned when attempting to update a non-existent user.
+    """
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    non_existent_user_id = "00000000-0000-0000-0000-000000000000"
+    updated_data = {"bio": "Updated bio"}
+    response = await async_client.put(f"/users/{non_existent_user_id}", json=updated_data, headers=headers)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+from unittest.mock import patch
+
+@pytest.mark.asyncio
+async def test_create_user_server_error(async_client, admin_token, email_service):
+    """
+    Ensure 500 is returned if user creation fails after passing all validations.
+    """
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    user_data = {
+        "email": "testfail@example.com",
+        "password": "Secure123!",
+        "nickname": "failure_case"
+    }
+
+    with patch("app.services.user_service.UserService.create", return_value=None):
+        response = await async_client.post("/users/", json=user_data, headers=headers)
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to create user"
+
+
+@pytest.mark.asyncio
+async def test_verify_email_invalid_token(async_client, admin_user):
+    """
+    Ensure 400 is returned if the email verification token is invalid or expired.
+    """
+    response = await async_client.get(f"/verify-email/{admin_user.id}/invalidtoken")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid or expired verification token"
+
+from unittest.mock import AsyncMock, patch
+
+@pytest.mark.asyncio
+async def test_verify_email_success(async_client, admin_user):
+    """
+    Ensure email verification returns success message for valid token.
+    """
+    with patch("app.services.user_service.UserService.verify_email_with_token", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = True
+        response = await async_client.get(f"/verify-email/{admin_user.id}/validtoken")
+        assert response.status_code == 200
+        assert response.json()["message"] == "Email verified successfully"
+
+@pytest.mark.asyncio
+async def test_create_user_missing_fields(async_client, admin_token):
+    """
+    Ensure 422 is returned when required fields are missing during user creation.
+    """
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    # Missing password and nickname
+    incomplete_data = {
+        "email": "missingfields@example.com"
+    }
+    response = await async_client.post("/users/", json=incomplete_data, headers=headers)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_field(async_client, admin_user, admin_token):
+    """
+    Ensure 422 is returned when trying to update a user with an invalid field (e.g., invalid URL).
+    """
+    invalid_data = {
+        "github_profile_url": "not-a-valid-url"
+    }
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = await async_client.put(f"/users/{admin_user.id}", json=invalid_data, headers=headers)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_register_missing_required_fields(async_client):
+    """
+    Ensure 422 is returned when trying to register a user without required fields like password.
+    """
+    incomplete_data = {
+        "email": "test@missingpassword.com"
+    }
+    response = await async_client.post("/register/", json=incomplete_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_register_duplicate_email(async_client, verified_user):
+    """
+    Ensure 400 is returned when attempting to register a user with an already registered email.
+    """
+    user_data = {
+        "email": verified_user.email,
+        "password": "AnotherSecurePass123!"
+    }
+    response = await async_client.post("/register/", json=user_data)
+    assert response.status_code == 400
+    assert "Email already exists" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_login_duplicate_routes_warning(async_client, verified_user):
+    """
+    Ensure login still works despite route being declared twice in code (once with include_in_schema=False).
+    """
+    form_data = {
+        "username": verified_user.email,
+        "password": "MySuperPassword$1234"
+    }
+    response = await async_client.post(
+        "/login/",
+        data=urlencode(form_data),
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert response.status_code == 200
+    assert "access_token" in response.json()
+
+
+
+

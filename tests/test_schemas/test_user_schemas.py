@@ -1,8 +1,8 @@
 from builtins import str
 import pytest
 from pydantic import ValidationError
-from datetime import datetime
 from app.schemas.user_schemas import UserBase, UserCreate, UserUpdate, UserResponse, UserListResponse, LoginRequest
+from pydantic import ValidationError
 
 # Tests for UserBase
 def test_user_base_valid(user_base_data):

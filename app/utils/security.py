@@ -3,7 +3,6 @@ from builtins import Exception, ValueError, bool, int, str
 import secrets
 import bcrypt
 from logging import getLogger
-from pydantic import ValidationError
 import re
 
 # Set up logging
@@ -64,6 +63,6 @@ def validate_password_strength(password: str) -> str:
     if not re.search(r"[0-9]", password):
         raise ValidationError("Password must contain at least one number.")
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
-        raise ValidationError("Password must contain at least one special character.")
+        raise ValueError("Password must contain at least one special character.")
     
     return password
