@@ -4,6 +4,8 @@ from sqlalchemy import select
 from app.dependencies import get_settings
 from app.models.user_model import User
 from app.services.user_service import UserService
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 pytestmark = pytest.mark.asyncio
 
@@ -58,6 +60,22 @@ async def test_get_by_email_user_does_not_exist(db_session):
     retrieved_user = await UserService.get_by_email(db_session, "non_existent_email@example.com")
     assert retrieved_user is None
 
+@pytest.mark.asyncio
+async def test_create_user_success(db_session):
+    user_data = {
+        "email": f"unique_{uuid4()}@example.com",
+        "password": "StrongPass123!",
+        "nickname": "testuser"
+    }
+
+    with patch("app.services.email_service.EmailService.send_verification_email", new_callable=AsyncMock):
+        user = await UserService.create(db_session, user_data, EmailService(...))
+
+    assert user is not None
+    assert user.email == user_data["email"]
+    assert user.hashed_password != user_data["password"]
+    assert user.verification_token is not None
+
 # Test updating a user with valid data
 async def test_update_user_valid_data(db_session, user):
     new_email = "updated_email@example.com"
@@ -91,13 +109,35 @@ async def test_list_users_with_pagination(db_session, users_with_same_role_50_us
 
 # Test registering a user with valid data
 async def test_register_user_with_valid_data(db_session, email_service):
+    from uuid import uuid4
     user_data = {
-        "email": "register_valid_user@example.com",
+        "email": f"register_{uuid4()}@example.com",
         "password": "RegisterValid123!",
+        "nickname":"registered_user"
     }
     user = await UserService.register_user(db_session, user_data, email_service)
-    assert user is not None
+    assert user is not None, "UserService.register_user returned None — check logs or validation rules"
     assert user.email == user_data["email"]
+    assert user_data.get("nickname"), "Nickname is missing from user_data"
+
+@pytest.mark.asyncio
+async def test_register_user_with_invalid_data(db_session):
+    """
+    Ensure registration fails when provided with an invalid email or weak password.
+    Also mock the email service to prevent actual SMTP calls.
+    """
+    user_data = {
+        "email": "invalidemail",   # Invalid email
+        "password": "short",       # Invalid password (less than 8 chars)
+        "nickname": "baduser"
+    }
+
+    # Patch the email service to avoid SMTP errors during test
+    with patch("app.services.email_service.EmailService.send_verification_email", new_callable=AsyncMock):
+        with pytest.raises(ValueError) as exc_info:
+            await UserService.register_user(db_session, user_data, EmailService(...))
+        assert "Password must be at least 8 characters long" in str(exc_info.value)
+
 
 # Test attempting to register a user with invalid data
 async def test_register_user_with_invalid_data(db_session, email_service):
@@ -156,3 +196,42 @@ async def test_unlock_user_account(db_session, locked_user):
     assert unlocked, "The account should be unlocked"
     refreshed_user = await UserService.get_by_id(db_session, locked_user.id)
     assert not refreshed_user.is_locked, "The user should no longer be locked"
+
+
+@pytest.mark.asyncio
+async def test_create_user_auto_generates_nickname(db_session):
+    user_data = {
+        "email": f"autonick_{uuid4()}@example.com",
+        "password": "AutoGenPass123!",
+        # no nickname
+    }
+
+    with patch("app.services.email_service.EmailService.send_verification_email", new_callable=AsyncMock):
+        user = await UserService.create(db_session, user_data, EmailService(...))
+
+    assert user is not None
+    assert user.nickname is not None
+    assert isinstance(user.nickname, str)
+
+
+@pytest.mark.asyncio
+async def test_create_user_with_duplicate_email_fails(db_session, verified_user):
+    user_data = {
+        "email": verified_user.email,
+        "password": "StrongPassword123!",
+        "nickname": "dupeuser"
+    }
+
+    result = await UserService.create(db_session, user_data, EmailService(...))
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_create_user_validation_error(db_session):
+    user_data = {
+        "email": "invalid-email",
+        "password": "123",  # too short
+    }
+
+    result = await UserService.create(db_session, user_data, EmailService(...))
+    assert result is None

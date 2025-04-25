@@ -18,14 +18,15 @@ from builtins import range
 from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
+from datetime import timedelta
 
 # Third-party imports
 import pytest
-from fastapi.testclient import TestClient
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, scoped_session
 from faker import Faker
+from uuid import uuid4
 
 # Application-specific imports
 from app.main import app
@@ -36,6 +37,10 @@ from app.utils.security import hash_password
 from app.utils.template_manager import TemplateManager
 from app.services.email_service import EmailService
 from app.services.jwt_service import create_access_token
+from app.services.jwt_service import create_access_token
+from app.dependencies import get_settings
+
+settings = get_settings()
 
 fake = Faker()
 
@@ -215,6 +220,7 @@ async def manager_user(db_session: AsyncSession):
 @pytest.fixture
 def user_base_data():
     return {
+        "nickname": "johnnydoe",
         "username": "john_doe_123",
         "email": "john.doe@example.com",
         "full_name": "John Doe",
@@ -225,6 +231,7 @@ def user_base_data():
 @pytest.fixture
 def user_base_data_invalid():
     return {
+        "nickname": "johnnydoe",
         "username": "john_doe_123",
         "email": "john.doe.example.com",
         "full_name": "John Doe",
@@ -241,7 +248,7 @@ def user_create_data(user_base_data):
 def user_update_data():
     return {
         "email": "john.doe.new@example.com",
-        "full_name": "John H. Doe",
+        "first_name": "John H. Doe",
         "bio": "I specialize in backend development with Python and Node.js.",
         "profile_picture_url": "https://example.com/profile_pictures/john_doe_updated.jpg"
     }
@@ -249,7 +256,7 @@ def user_update_data():
 @pytest.fixture
 def user_response_data():
     return {
-        "id": "unique-id-string",
+        "id": uuid4(),
         "username": "testuser",
         "email": "test@example.com",
         "last_login_at": datetime.now(),
@@ -260,9 +267,30 @@ def user_response_data():
 
 @pytest.fixture
 def login_request_data():
-    return {"username": "john_doe_123", "password": "SecurePassword123!"}
+    return {"email": "john_doe_123@omgthisisexhausting.com", "password": "SecurePassword123!"}
 
 @pytest.fixture
 async def admin_token(admin_user):
     token = create_access_token(data={"sub": admin_user.email, "role": admin_user.role})
+    return token
+
+
+@pytest.fixture
+async def user_token(user):
+    """
+    Fixture to generate a valid JWT token for a regular AUTHENTICATED user.
+    """
+    return create_access_token(
+        data={"sub": user.email, "role": user.role.value},
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+    )
+
+@pytest.fixture
+async def manager_token(manager_user):
+    token = create_access_token(data={"sub": manager_user.email, "role": manager_user.role})
+    return token
+
+@pytest.fixture
+async def verified_user_token(verified_user):
+    token = create_access_token(data={"sub": verified_user.email, "role": verified_user.role})
     return token
