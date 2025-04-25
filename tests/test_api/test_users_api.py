@@ -334,7 +334,3 @@ async def test_login_duplicate_routes_warning(async_client, verified_user):
     )
     assert response.status_code == 200
     assert "access_token" in response.json()
-
-
-
-
